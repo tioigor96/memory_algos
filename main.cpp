@@ -14,6 +14,7 @@ enum __algo_t {
     second_chance,
     WSet,
     WSetImp,
+    OPT,
     WIP
 };
 typedef enum __algo_t algo_t;
@@ -412,9 +413,70 @@ void printHitsAndFaults_WS(string reference_string, int frames) {
     cout << "\n";
 }
 
+void printHitsAndFaults_OPT(string reference_string, int frames) {
+    int pf = 0;
+    int arr[frames];
+    memset(arr, -1, sizeof(arr));
+    vector<string> splitted = split(reference_string);
+
+    for (int k = 0; k < splitted.size(); k++) {
+        int x = stoi(splitted.at(k));
+        bool lpf = false;
+        bool tonextreq = false;     //flag if i need to go to next req
+
+        if (!findAndUpdate_fifo(x, arr, frames)) {
+            pf++;
+            lpf = true;
+            for (int i = 0; i < frames; i++) {      //looking for first free page
+                if (arr[i] == -1) {     //frame is free, so i can swapin the page
+                    arr[i] = x;
+                    tonextreq = true;
+                    break;
+                }
+            }
+            if (!tonextreq) {     //no one of frames are free, so need to check who swapout...
+                set<pair<int, int>> checking;       //save pair of (first future req for pagen, pagen),
+                // pagen are the page actually in memory
+                for (auto fim: arr) {
+                    bool pfind = false;             //flag to see if pagen is scheduled in future or not
+                    for (int i = k + 1; i < splitted.size() && !pfind; i++) {
+                        if (fim == stoi(splitted.at(i))) {
+                            pair<int, int> loc(i, fim);
+                            checking.insert(loc);
+                            pfind = true;
+                        }
+                    }
+                    if (!pfind) {       //fim(pagen) is not in next reqs, so push at the end
+                        pair<int, int> loc(splitted.size(), fim);
+                        checking.insert(loc);
+                    }
+                }
+
+                //delete the last occurence of frames in memory
+                for (int i = 0; i < frames; i++) {
+                    if (arr[i] == checking.rbegin()->second) {
+                        arr[i] = x;
+                        break;
+                    }
+                }
+            }
+        }
+
+        //print memory at SC(RAM,PSI(R_alpha,i))
+        cout << "[i:" << setw(2) << k << "]\tPSI(R_alpha,i) :: <" << setw(2) << x << ">\t|";
+        for (int k = 0; k < frames; k++) {
+            cout << setw(2) << arr[k] << " | ";
+        }
+        cout << (lpf ? "\tPF " : "");
+        cout << "\n";
+    }
+    cout << "Total page faults were " << pf << "\n";
+    cout << "\n";
+}
+
 int main(int argc, char *argv[]) {
 
-    algo_t algo = fifo;
+    algo_t algo = OPT;
     string reference_string = "1 2 3 4 2 1 5 6 2 1 2 3 7 6 3 2 1 2 3 6";
     int frames = 4;
 
@@ -437,6 +499,8 @@ int main(int argc, char *argv[]) {
             algo = WSet;
         else if (strcmp(argv[1], "WS_imp") == 0)
             algo = WSetImp;
+        else if (strcmp(argv[1], "OPT") == 0)
+            algo = OPT;
         else
             algo = WIP;
 
@@ -452,6 +516,8 @@ int main(int argc, char *argv[]) {
         printHitsAndFaults_WS(reference_string, frames);
     if (algo == WSetImp)
         printHitsAndFaults_WSimproved(reference_string, frames);
+    if (algo == OPT)
+        printHitsAndFaults_OPT(reference_string, frames);
 
     if (algo == WIP)
         cout << "WIP, not implemented yet!\n";
