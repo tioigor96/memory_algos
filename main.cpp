@@ -534,7 +534,7 @@ void printHitsAndFaults_OPT(const string &reference_string, int frames) {
         }
 
         //print memory at SC(RAM,PSI(R_alpha,i))
-        cout << "[i:" << setw(2) << k << "]\tPSI(R_alpha,i) :: <" << setw(2) << x << ">\t|";
+        cout << "[i:" << setw(2) << k + 1 << "]\tPSI(R_alpha,i) :: <" << setw(2) << x << ">\t|";
         for (int k = 0; k < frames; k++) {
             cout << setw(2) << arr[k] << " | ";
         }
