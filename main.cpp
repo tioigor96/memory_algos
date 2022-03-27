@@ -12,6 +12,7 @@ using namespace std;
 enum __algo_t {
     fifo,
     second_chance,
+    WSEval,
     WSet,
     WSetImp,
     OPT,
@@ -19,7 +20,7 @@ enum __algo_t {
 };
 typedef enum __algo_t algo_t;
 
-vector<string> split(string str) {
+vector<string> split(const string &str) {
     vector<string> splitted;
 
     string word = "";
@@ -28,7 +29,7 @@ vector<string> split(string str) {
             splitted.push_back(word);
             word = "";
         } else {
-            word = word + x;
+            word += x;
         }
     }
     splitted.push_back(word);
@@ -36,25 +37,15 @@ vector<string> split(string str) {
     return splitted;
 }
 
-// If page found, updates the second chance bit to true
-static bool findAndUpdate_sc(int x, int arr[], bool second_chance[], int frames) {
-    int i;
-    for (i = 0; i < frames; i++) {
-        if (arr[i] == x) {
-            // Mark that the page deserves a second chance
-            second_chance[i] = true;
-            // Return 'true', that is there was a hit
-            // and so there's no need to replace any page
-            return true;
-        }
-    }
-    // Return 'false' so that a page for replacement is selected
-    // as he reuested page doesn't exist in memory
-    return false;
-}
-
-// If page found return true, else false.
-static bool findAndUpdate_fifo(int x, int arr[], int frames) {
+/////////////////////////// FIFO
+/**
+ * Check if a page already is in memory
+ * @param x the requested frame
+ * @param arr the memory space
+ * @param frames frames in memory
+ * @return true if page found, else false.
+ */
+static bool findAndUpdate_fifo(int x, const int arr[], int frames) {
     int i;
     for (i = 0; i < frames; i++) {
         if (arr[i] == x) {
@@ -68,29 +59,14 @@ static bool findAndUpdate_fifo(int x, int arr[], int frames) {
     return false;
 }
 
-
-// Updates the page in memory and returns the pointer
-static int replaceAndUpdate_sc(int x, int arr[], bool second_chance[], int frames, int pointer) {
-    while (true) {
-        // We found the page to replace
-        if (!second_chance[pointer]) {
-            // Replace with new page
-            arr[pointer] = x;
-
-            // Return updated pointer
-            return (pointer + 1) % frames;
-        }
-
-        // Mark it 'false' as it got one chance
-        // and will be replaced next time unless accessed again
-        second_chance[pointer++] = false;
-
-        //Pointer is updated in round robin manner
-        pointer %= frames;
-    }
-}
-
-// Updates the page in memory and returns the pointer as second chanc algo, but degenerate to fifo
+/**
+ * update the page in memory and return the next pointer as fifo prescrition
+ * @param x the new requested page
+ * @param arr the memory space
+ * @param frames numbers of frames in memoty
+ * @param pointer the actual victim pointer
+ * @return return the next page victim
+ */
 static int replaceAndUpdate_fifo(int x, int arr[], int frames, int pointer) {
     //we will ALWAYS pdate the first inserted frame
     arr[pointer] = x;
@@ -98,55 +74,7 @@ static int replaceAndUpdate_fifo(int x, int arr[], int frames, int pointer) {
     return (pointer + 1) % frames;
 }
 
-static void printHitsAndFaults_sc(string reference_string, int frames) {
-    int pointer, i = 0, x, pf;
-    //initially we consider frame 0 is to be replaced
-    pointer = 0;
-
-    //number of page faults
-    pf = 0;
-
-    // Create a array to hold page numbers
-    int arr[frames];
-
-    // No pages initially in frame,
-    // which is indicated by -1
-    memset(arr, -1, sizeof(arr));
-
-    // Create second chance array.
-    // Can also be a byte array for optimizing memory
-    bool second_chance[frames];
-    for (int i = 0; i < frames; i++)
-        second_chance[i] = false;
-
-    //tokenize the string
-    vector<string> splitted = split(reference_string);
-
-    //do second chance algo
-    for (auto str: splitted) {
-        i++;
-        bool lpf = false;
-        x = stoi(str);
-        // Finds if there exists a need to replace
-        // any page at all
-        if (!findAndUpdate_sc(x, arr, second_chance, frames)) {
-            // Selects and updates a victim page
-            pointer = replaceAndUpdate_sc(x, arr, second_chance, frames, pointer);
-            // Update page faults
-            pf++;
-            lpf = true;
-        }
-
-        //print memory at SC(RAM,PSI(R_alpha,i)) and residual pointer
-        cout << "[i:" << setw(2) << i << "]\tPSI(R_alpha,i) :: <" << setw(2) << x << ">\t|";
-        for (int k = 0; k < frames; k++)
-            cout << setw(2) << arr[k] << " | ";
-        cout << (lpf ? "\tPF " : "\t") << "\tptr:" << pointer << "\n";
-    }
-    cout << "Total page faults were " << pf << "\n";
-}
-
-void printHitsAndFaults_fifo(string reference_string, int frames) {
+void printHitsAndFaults_fifo(const string &reference_string, int frames) {
     int pointer, i = 0, x, pf;
     //initially we consider frame 0 is to be replaced
     pointer = 0;
@@ -162,7 +90,7 @@ void printHitsAndFaults_fifo(string reference_string, int frames) {
     vector<string> splitted = split(reference_string);
 
     //do fifo algo
-    for (auto str: splitted) {
+    for (const auto &str: splitted) {
         bool lpf = false;
         i++;
         x = stoi(str);
@@ -186,7 +114,119 @@ void printHitsAndFaults_fifo(string reference_string, int frames) {
     cout << "Total page faults were " << pf << "\n";
 }
 
-void printWSFlow(string reference_string, int frames) {
+////////////////////////  SECOND CHANCE
+/**
+ * If page found, updates the second chance bit to true
+ * @param x the page
+ * @param arr the memory space
+ * @param second_chance the second_chance reference bits array
+ * @param frames number of frames
+ * @return true if found x in arr, false otherwise
+ */
+static bool findAndUpdate_sc(int x, const int arr[], bool second_chance[], int frames) {
+    int i;
+    for (i = 0; i < frames; i++) {
+        if (arr[i] == x) {
+            // Mark that the page deserves a second chance
+            second_chance[i] = true;
+            // Return 'true', that is there was a hit
+            // and so there's no need to replace any page
+            return true;
+        }
+    }
+    // Return 'false' so that a page for replacement is selected
+    // as he reuested page doesn't exist in memory
+    return false;
+}
+
+/**
+ * Updates the page in memory and returns the pointer
+ * @param x req frame
+ * @param arr memory space
+ * @param second_chance the second_chance reference bits array
+ * @param frames max frames in memory
+ * @param pointer the actual pointer
+ * @return next memory pointer
+ */
+static int replaceAndUpdate_sc(int x, int arr[], bool second_chance[], int frames, int pointer) {
+    while (true) {
+        // We found the page to replace
+        if (!second_chance[pointer]) {
+            // Replace with new page
+            arr[pointer] = x;
+
+            // Return updated pointer
+            return (pointer + 1) % frames;
+        }
+
+        // Mark it 'false' as it got one chance
+        // and will be replaced next time unless accessed again
+        second_chance[pointer++] = false;
+
+        //Pointer is updated in round robin manner
+        pointer %= frames;
+    }
+}
+
+/**
+ * do the second_chance algorithm
+ * @param reference_string
+ * @param frames
+ */
+static void printHitsAndFaults_sc(const string &reference_string, int frames) {
+    int pointer, i = 0, x, pf;
+    //initially we consider frame 0 is to be replaced
+    pointer = 0;
+
+    //number of page faults
+    pf = 0;
+
+    // Create a array to hold page numbers
+    int arr[frames];
+
+    // No pages initially in frame,
+    // which is indicated by -1
+    memset(arr, -1, sizeof(arr));
+
+    // Create second chance array.
+    // Can also be a byte array for optimizing memory
+    bool second_chance[frames];
+    memset(second_chance, false, sizeof(second_chance));
+
+    //tokenize the string
+    vector<string> splitted = split(reference_string);
+
+    //do second chance algo
+    for (const auto &str: splitted) {
+        i++;
+        bool lpf = false;
+        x = stoi(str);
+        // Finds if there exists a need to replace
+        // any page at all
+        if (!findAndUpdate_sc(x, arr, second_chance, frames)) {
+            // Selects and updates a victim page
+            pointer = replaceAndUpdate_sc(x, arr, second_chance, frames, pointer);
+            // Update page faults
+            pf++;
+            lpf = true;
+        }
+
+        //print memory at SC(RAM,PSI(R_alpha,i)) and residual pointer
+        cout << "[i:" << setw(2) << i << "]\tPSI(R_alpha,i) :: <" << setw(2) << x << ">\t|";
+        for (int k = 0; k < frames; k++)
+            cout << setw(2) << arr[k] << " | ";
+        cout << (lpf ? "\tPF " : "\t") << "\tptr:" << pointer << "\n";
+    }
+    cout << "Total page faults were " << pf << "\n";
+}
+
+//////////////////////////// Working Set
+/**
+ * show the working set evolution in time
+ * @param reference_string
+ * @param frames
+ */
+void printWSFlow(const string &reference_string, int frames) {
     //page fault counter
     int pf = 0;
     //splitted reference string
@@ -196,7 +236,7 @@ void printWSFlow(string reference_string, int frames) {
     //old set to see if some page need to swap/make a page fault
     set<string> oldWSSet;
 
-    for (auto rf: splitted) {
+    for (const auto &rf: splitted) {
         set<string> WSSet;  //actual WS
         for (int k = 0; k < frames; k++) {  //make new WS
             WSSet.insert(i - k < 0 ? splitted.at(0) : splitted.at(i - k));
@@ -229,7 +269,15 @@ void printWSFlow(string reference_string, int frames) {
     cout << "Total page faults were " << pf << "\n";
 }
 
-bool replaceAndUpdate_WSimproved(int arr[], int frames, set<int> WSet, set<int> oldWSet) {
+/**
+ * WSet base algo, the only difference is whe do a swapout only if stricted requested.
+ * @param arr the memory space
+ * @param frames frames in memory
+ * @param WSet next WS
+ * @param oldWSet actual WS
+ * @return true if we swapout a page, false otherwise
+ */
+bool replaceAndUpdate_WSimproved(int arr[], int frames, const set<int> &WSet, const set<int> &oldWSet) {
     bool find[frames];
     set<int> diff;
 
@@ -257,7 +305,7 @@ bool replaceAndUpdate_WSimproved(int arr[], int frames, set<int> WSet, set<int> 
     set_difference(WSet.begin(), WSet.end(), oldWSet.begin(),
                    oldWSet.end(), std::inserter(diff, diff.begin()));
 
-    assert(diff.size() == 0 || diff.size() == 1);       //assert: we have always al least 1 page in diff
+    assert(diff.empty() || diff.size() == 1);       //assert: we have always al least 1 page in diff
     if (!diff.empty()) {
         int npage = *diff.begin();                          //get  the page
 
@@ -272,7 +320,12 @@ bool replaceAndUpdate_WSimproved(int arr[], int frames, set<int> WSet, set<int> 
     return false;
 }
 
-void printHitsAndFaults_WSimproved(string reference_string, int frames) {
+/**
+ * WS base algo, the diff is we swap-out a page only if necessary
+ * @param reference_string
+ * @param frames
+ */
+void printHitsAndFaults_WSimproved(const string &reference_string, int frames) {
     //page fault counter
     int pf = 0;
     //splitted reference string
@@ -286,7 +339,7 @@ void printHitsAndFaults_WSimproved(string reference_string, int frames) {
     //init all memory to -1 (no page in memory)
     memset(arr, -1, sizeof(arr));
 
-    for (auto rf: splitted) {
+    for (const auto &rf: splitted) {
         set<int> WSSet;  //actual WS
         bool lpf = false;   //have a PF is false for invariant;
         bool ntd = true;    //we assume haven't to do anything...
@@ -326,8 +379,15 @@ void printHitsAndFaults_WSimproved(string reference_string, int frames) {
     cout << "\n";
 }
 
-
-bool replaceAndUpdate_WS(int arr[], int frames, set<int> WSet, set<int> oldWSet) {
+/**
+ * WSet base algo
+ * @param arr the memory space
+ * @param frames frames in memory
+ * @param WSet next WS
+ * @param oldWSet actual WS
+ * @return true if we swapout a page, false otherwise
+ */
+bool replaceAndUpdate_WS(int arr[], int frames, const set<int> &WSet, const set<int> &oldWSet) {
     bool find[frames];
     set<int> diff;
 
@@ -354,7 +414,7 @@ bool replaceAndUpdate_WS(int arr[], int frames, set<int> WSet, set<int> oldWSet)
     set_difference(WSet.begin(), WSet.end(), oldWSet.begin(),
                    oldWSet.end(), std::inserter(diff, diff.begin()));
 
-    assert(diff.size() == 0 || diff.size() == 1);       //assert: we have always al least 1 page in diff
+    assert(diff.empty() || diff.size() == 1);       //assert: we have always al least 1 page in diff
     if (!diff.empty()) {
         int npage = *diff.begin();                          //get  the page
 
@@ -369,7 +429,12 @@ bool replaceAndUpdate_WS(int arr[], int frames, set<int> WSet, set<int> oldWSet)
     return false;
 }
 
-void printHitsAndFaults_WS(string reference_string, int frames) {
+/**
+ * Working Set base algo
+ * @param reference_string
+ * @param frames
+ */
+void printHitsAndFaults_WS(const string &reference_string, int frames) {
     //page fault counter
     int pf = 0;
     //splitted reference string
@@ -383,7 +448,7 @@ void printHitsAndFaults_WS(string reference_string, int frames) {
     //init all memory to -1 (no page in memory)
     memset(arr, -1, sizeof(arr));
 
-    for (auto rf: splitted) {
+    for (const auto &rf: splitted) {
         set<int> WSSet;  //actual WS
         bool lpf = false;   //have a PF is false for invariant;
 
@@ -413,7 +478,13 @@ void printHitsAndFaults_WS(string reference_string, int frames) {
     cout << "\n";
 }
 
-void printHitsAndFaults_OPT(string reference_string, int frames) {
+//////////////////////// OPTimal
+/**
+ * OPTimal algo to swapping out pages from memory
+ * @param reference_string
+ * @param frames
+ */
+void printHitsAndFaults_OPT(const string &reference_string, int frames) {
     int pf = 0;
     int arr[frames];
     memset(arr, -1, sizeof(arr));
@@ -474,9 +545,10 @@ void printHitsAndFaults_OPT(string reference_string, int frames) {
     cout << "\n";
 }
 
+///////////////////// MAIN
 int main(int argc, char *argv[]) {
 
-    algo_t algo = OPT;
+    algo_t algo = fifo;
     string reference_string = "1 2 3 4 2 1 5 6 2 1 2 3 7 6 3 2 1 2 3 6";
     int frames = 4;
 
@@ -484,9 +556,10 @@ int main(int argc, char *argv[]) {
 
         if (strcmp(argv[1], "--help") == 0) {
             cout << "Usage:\n"
-                    "\t - arg1: algorithm to applicate: {fifo,second_chance, WS, WS_imp}\n"
+                    "\t - arg1: algorithm to applicate: {fifo, second_chance, WS, WSEval, WS_imp, OPT}\n"
                     "\t - arg2: number of frames\n"
                     "\t - arg3: reference string\n\n"
+                    "The \"WSEval\" show only how the WS change in time. We assume WS(t,Delta) with Delta= number of frames.\n\n"
                     "example: ./memory_algo second_chance 4 \"1 2 3 4 2 1 5 6 2 1 2 3 7 6 3 2 1 2 3 6\"\n";
             return 0;
         }
@@ -499,6 +572,8 @@ int main(int argc, char *argv[]) {
             algo = WSet;
         else if (strcmp(argv[1], "WS_imp") == 0)
             algo = WSetImp;
+        else if (strcmp(argv[1], "WSEval") == 0)
+            algo = WSEval;
         else if (strcmp(argv[1], "OPT") == 0)
             algo = OPT;
         else
@@ -516,6 +591,8 @@ int main(int argc, char *argv[]) {
         printHitsAndFaults_WS(reference_string, frames);
     if (algo == WSetImp)
         printHitsAndFaults_WSimproved(reference_string, frames);
+    if (algo == WSEval)
+        printWSFlow(reference_string, frames);
     if (algo == OPT)
         printHitsAndFaults_OPT(reference_string, frames);
 
